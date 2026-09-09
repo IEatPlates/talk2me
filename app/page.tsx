@@ -33,11 +33,10 @@ function Avatar({ person, size = "normal" }: { person: Pick<Person, "initials" |
 }
 
 export default function Home() {
-  const [session, setSession] = useState<{ id: string; name: string; email: string } | null>(null);
+  const [session, setSession] = useState<{ id: string; name: string; username: string } | null>(null);
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
-  const [authEmail, setAuthEmail] = useState("");
+  const [authUsername, setAuthUsername] = useState("");
   const [authPassword, setAuthPassword] = useState("");
-  const [authName, setAuthName] = useState("");
   const [authError, setAuthError] = useState("");
   const [chats, setChats] = useState(initialChats);
   const [activeChatId, setActiveChatId] = useState("riley");
@@ -51,10 +50,10 @@ export default function Home() {
   useEffect(() => {
     if (!supabase) return;
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session?.user) setSession({ id: data.session.user.id, name: data.session.user.user_metadata?.display_name || data.session.user.email?.split("@")[0] || "You", email: data.session.user.email || "" });
+      if (data.session?.user) setSession({ id: data.session.user.id, name: data.session.user.user_metadata?.display_name || data.session.user.user_metadata?.username || "You", username: data.session.user.user_metadata?.username || "user" });
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      if (nextSession?.user) setSession({ id: nextSession.user.id, name: nextSession.user.user_metadata?.display_name || nextSession.user.email?.split("@")[0] || "You", email: nextSession.user.email || "" });
+      if (nextSession?.user) setSession({ id: nextSession.user.id, name: nextSession.user.user_metadata?.display_name || nextSession.user.user_metadata?.username || "You", username: nextSession.user.user_metadata?.username || "user" });
     });
     return () => listener.subscription.unsubscribe();
   }, []);
@@ -76,15 +75,17 @@ export default function Home() {
   async function handleAuth(event: FormEvent) {
     event.preventDefault();
     setAuthError("");
-    if (!authEmail || !authPassword || (authMode === "signup" && !authName)) return setAuthError("Fill in all fields to continue.");
+    const username = authUsername.trim().toLowerCase();
+    const authIdentifier = `${username}@users.talk2me.local`;
+    if (!/^[a-z0-9_]{3,24}$/.test(username) || !authPassword) return setAuthError("Use a username with 3–24 letters, numbers, or underscores, plus a password.");
     if (supabase) {
       const result = authMode === "login"
-        ? await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword })
-        : await supabase.auth.signUp({ email: authEmail, password: authPassword, options: { data: { display_name: authName, username: authEmail.split("@")[0] } } });
+        ? await supabase.auth.signInWithPassword({ email: authIdentifier, password: authPassword })
+        : await supabase.auth.signUp({ email: authIdentifier, password: authPassword, options: { data: { display_name: username, username } } });
       if (result.error) return setAuthError(result.error.message);
-      setSession({ id: result.data.user?.id || "demo-user", name: authName || authEmail.split("@")[0], email: authEmail });
+      setSession({ id: result.data.user?.id || "demo-user", name: username, username });
     } else {
-      setSession({ id: "demo-user", name: authName || authEmail.split("@")[0], email: authEmail });
+      setSession({ id: "demo-user", name: username, username });
     }
   }
 
@@ -107,9 +108,9 @@ export default function Home() {
   }
 
   const activeChat = chats.find(chat => chat.id === activeChatId) || chats[0];
-  const currentUser: Person = { ...me, name: session?.name || me.name };
+  const currentUser: Person = { ...me, name: session?.name || me.name, handle: session ? `@${session.username}` : me.handle };
 
-  if (!session) return <AuthScreen mode={authMode} setMode={setAuthMode} email={authEmail} setEmail={setAuthEmail} password={authPassword} setPassword={setAuthPassword} name={authName} setName={setAuthName} error={authError} onSubmit={handleAuth} />;
+  if (!session) return <AuthScreen mode={authMode} setMode={setAuthMode} username={authUsername} setUsername={setAuthUsername} password={authPassword} setPassword={setAuthPassword} error={authError} onSubmit={handleAuth} />;
 
   return <main className="shell">
     <aside className="sidebar">
@@ -140,6 +141,6 @@ export default function Home() {
   </main>;
 }
 
-function AuthScreen({ mode, setMode, email, setEmail, password, setPassword, name, setName, error, onSubmit }: { mode: "login" | "signup"; setMode: (mode: "login" | "signup") => void; email: string; setEmail: (value: string) => void; password: string; setPassword: (value: string) => void; name: string; setName: (value: string) => void; error: string; onSubmit: (event: FormEvent) => void }) {
-  return <main className="auth-page"><section className="auth-art"><div className="brand"><span className="brand-mark">t</span>talk2me</div><div className="art-copy"><span className="kicker">A quieter kind of social</span><h1>Good talks, with good people.</h1><p>Talk2me keeps your conversations close, your circles intentional, and your attention where it belongs.</p></div><div className="art-note"><i /> private by default · built for your people</div></section><section className="auth-panel"><form className="auth-form" onSubmit={onSubmit}><span className="kicker">Welcome back</span><h2>{mode === "login" ? "Come on in." : "Make some room."}</h2><p>{mode === "login" ? "Log in to pick up where you left off." : "Create your account and invite your people."}</p>{mode === "signup" && <div className="field"><label htmlFor="name">Display name</label><input id="name" value={name} onChange={event => setName(event.target.value)} placeholder="How friends know you" /></div>}<div className="field"><label htmlFor="email">Email address</label><input id="email" type="email" value={email} onChange={event => setEmail(event.target.value)} placeholder="you@example.com" /></div><div className="field"><label htmlFor="password">Password</label><input id="password" type="password" value={password} onChange={event => setPassword(event.target.value)} placeholder="At least 6 characters" /></div>{error && <p style={{ color: "#b05043", fontSize: 12, margin: "-5px 0 13px" }}>{error}</p>}<button className="primary-btn full" type="submit">{mode === "login" ? "Log in" : "Create account"}</button><div className="auth-switch">{mode === "login" ? "New here? " : "Already have an account? "}<button type="button" className="text-btn" onClick={() => setMode(mode === "login" ? "signup" : "login")}>{mode === "login" ? "Create an account" : "Log in"}</button></div>{!isSupabaseConfigured && <div className="demo-note">DEMO MODE · connect Supabase with .env.local to persist accounts, friends, messages, and notifications.</div>}</form></section></main>;
+function AuthScreen({ mode, setMode, username, setUsername, password, setPassword, error, onSubmit }: { mode: "login" | "signup"; setMode: (mode: "login" | "signup") => void; username: string; setUsername: (value: string) => void; password: string; setPassword: (value: string) => void; error: string; onSubmit: (event: FormEvent) => void }) {
+  return <main className="auth-page"><section className="auth-art"><div className="brand"><span className="brand-mark">t</span>talk2me</div><div className="art-copy"><span className="kicker">A quieter kind of social</span><h1>Good talks, with good people.</h1><p>Talk2me keeps your conversations close, your circles intentional, and your attention where it belongs.</p></div><div className="art-note"><i /> private by default · built for your people</div></section><section className="auth-panel"><form className="auth-form" onSubmit={onSubmit}><span className="kicker">Welcome back</span><h2>{mode === "login" ? "Come on in." : "Make some room."}</h2><p>{mode === "login" ? "Log in to pick up where you left off." : "Create your account and invite your people."}</p><div className="field"><label htmlFor="username">Username</label><input id="username" value={username} onChange={event => setUsername(event.target.value)} placeholder="your_username" autoCapitalize="none" autoCorrect="off" /></div><div className="field"><label htmlFor="password">Password</label><input id="password" type="password" value={password} onChange={event => setPassword(event.target.value)} placeholder="At least 6 characters" /></div>{error && <p style={{ color: "#b05043", fontSize: 12, margin: "-5px 0 13px" }}>{error}</p>}<button className="primary-btn full" type="submit">{mode === "login" ? "Log in" : "Create account"}</button><div className="auth-switch">{mode === "login" ? "New here? " : "Already have an account? "}<button type="button" className="text-btn" onClick={() => setMode(mode === "login" ? "signup" : "login")}>{mode === "login" ? "Create an account" : "Log in"}</button></div>{!isSupabaseConfigured && <div className="demo-note">DEMO MODE · connect Supabase with .env.local to persist accounts, friends, messages, and notifications.</div>}</form></section></main>;
 }

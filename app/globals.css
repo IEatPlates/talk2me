@@ -114,3 +114,89 @@ button { cursor: pointer; }
 
 @media (max-width: 1050px) { .shell { grid-template-columns: 220px minmax(440px, 1fr); } .rail { display: none; } }
 @media (max-width: 720px) { .auth-page { grid-template-columns: 1fr; } .auth-art { min-height: 315px; padding: 28px; } .art-copy h1 { font-size: 43px; } .auth-panel { padding: 35px 24px; } .shell { display: block; } .sidebar { display: none; } .chat-header { padding: 0 18px; } .messages { padding: 24px 18px 12px; } .composer-wrap { padding: 12px 18px 20px; } }
+
+/* Messages-inspired visual language */
+:root {
+  --ios-blue: #007aff;
+  --ios-blue-dark: #006ee6;
+  --ios-gray: #8e8e93;
+  --ios-line: #d8d8dc;
+  --ios-bg: #f2f2f7;
+  --ios-soft: #e5e5ea;
+  --ink: #111114;
+  --muted: #8e8e93;
+  --line: #e1e1e6;
+  --paper: var(--ios-bg);
+  --white: #ffffff;
+  --shadow: 0 12px 30px rgba(0, 0, 0, .08);
+}
+
+body { background: var(--ios-bg); color: var(--ink); font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", sans-serif; }
+button, input, textarea { font-family: inherit; }
+.auth-page { background: var(--ios-bg); }
+.auth-art { background: var(--ios-blue); color: white; }
+.auth-art::before { border-color: rgba(255,255,255,.24); box-shadow: 0 0 0 35px rgba(255,255,255,.06), 0 0 0 70px rgba(255,255,255,.06); }
+.auth-art::after { background: #5ac8fa; }
+.auth-art .brand-mark { background: white; color: var(--ios-blue); }
+.auth-art .kicker, .auth-art p, .auth-art .art-note { color: rgba(255,255,255,.78); }
+.art-copy h1 { letter-spacing: -.055em; }
+.auth-panel { background: white; }
+.auth-form h2 { letter-spacing: -.045em; }
+.field label { color: #3c3c43; }
+.field input { border-color: var(--ios-line); border-radius: 11px; background: #f9f9fb; }
+.field input:focus { border-color: var(--ios-blue); box-shadow: 0 0 0 3px rgba(0,122,255,.14); }
+.primary-btn { border-radius: 11px; background: var(--ios-blue); padding: 13px 18px; }
+.primary-btn:hover { background: var(--ios-blue-dark); transform: none; }
+.text-btn { color: var(--ios-blue); }
+.demo-note { background: var(--ios-bg); color: var(--ios-gray); font-family: inherit; }
+
+.shell { grid-template-columns: 280px minmax(460px, 1fr) 280px; background: var(--ios-bg); }
+.sidebar { border-right: 1px solid var(--ios-line); padding: 22px 10px 14px; background: rgba(255,255,255,.9); }
+.sidebar .brand { padding: 0 14px; color: #1c1c1e; font-size: 21px; }
+.brand-mark { width: 28px; height: 28px; border-radius: 50%; margin-right: 7px; background: var(--ios-blue); color: white; }
+.profile { padding: 26px 14px 23px; }
+.profile strong, .person strong { font-size: 14px; font-weight: 600; }
+.profile span, .person span { font-size: 12px; color: var(--ios-gray); }
+.nav-label { padding: 0 14px 8px; color: var(--ios-gray); font-family: inherit; font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.nav { gap: 1px; }
+.nav-item { gap: 10px; padding: 12px 14px; border-radius: 10px; color: #636366; font-size: 14px; }
+.nav-item:hover, .nav-item.active { background: #e5f1ff; color: var(--ios-blue); }
+.nav-item svg { width: 18px; }
+.nav-item .count { background: var(--ios-blue); color: white; font-family: inherit; font-size: 11px; font-weight: 600; }
+.sidebar-footer { padding: 14px; border-top-color: var(--ios-line); color: var(--ios-gray); font-family: inherit; font-size: 10px; }
+
+.chat-main { background: var(--ios-bg); }
+.chat-header { min-height: 76px; padding: 0 28px; border-bottom-color: var(--ios-line); background: rgba(242,242,247,.82); backdrop-filter: blur(18px); }
+.header-person { gap: 10px; }
+.header-person h1 { font-size: 17px; font-weight: 700; letter-spacing: -.025em; }
+.header-person p { margin-top: 2px; color: var(--ios-gray); font-family: inherit; font-size: 12px; text-transform: none; letter-spacing: 0; }
+.icon-btn { width: 34px; height: 34px; border-color: transparent; border-radius: 50%; background: rgba(255,255,255,.78); color: var(--ios-blue); }
+.icon-btn:hover { color: var(--ios-blue-dark); border-color: transparent; background: white; }
+.messages { padding: 23px 28px 12px; }
+.date-label { margin: 3px 0 23px; color: var(--ios-gray); font-family: inherit; font-size: 11px; font-weight: 500; letter-spacing: 0; }
+.date-label::before, .date-label::after { background: var(--ios-line); }
+.message-row { gap: 8px; margin-bottom: 13px; }
+.message-content { max-width: min(480px, 78%); }
+.bubble { padding: 9px 13px; border-radius: 19px 19px 19px 5px; background: #e5e5ea; color: #1c1c1e; font-size: 15px; line-height: 1.38; }
+.self .bubble { border-radius: 19px 19px 5px 19px; background: var(--ios-blue); color: white; }
+.message-meta { margin-top: 4px; color: var(--ios-gray); font-family: inherit; font-size: 10px; }
+.composer-wrap { padding: 10px 28px 21px; }
+.composer { gap: 7px; padding: 5px 6px 5px 12px; border: 1px solid var(--ios-line); border-radius: 22px; background: rgba(255,255,255,.86); }
+.composer textarea { padding: 5px 0; font-size: 15px; }
+.composer .icon-btn { width: 28px !important; height: 28px; background: transparent; }
+.send-btn { width: 30px; height: 30px; border-radius: 50%; background: var(--ios-blue); }
+
+.rail { border-left-color: var(--ios-line); padding: 27px 20px; background: rgba(255,255,255,.72); }
+.rail-heading { margin-bottom: 15px; }
+.rail-heading h2 { font-size: 15px; letter-spacing: -.02em; }
+.rail-heading span { color: var(--ios-gray); font-family: inherit; font-size: 11px; }
+.person { padding: 9px 0; }
+.rail-section { padding-bottom: 21px; margin-bottom: 21px; border-bottom-color: var(--ios-line); }
+.accept-btn { border-radius: 16px; padding: 7px 12px; background: #d9ecff; color: var(--ios-blue); font-size: 12px; }
+.modal-backdrop { background: rgba(0,0,0,.28); }
+.modal { border-radius: 16px; }
+.modal h2 { letter-spacing: -.04em; }
+.friend-check input { accent-color: var(--ios-blue); }
+
+@media (max-width: 1050px) { .shell { grid-template-columns: 245px minmax(440px, 1fr); } }
+@media (max-width: 720px) { .auth-art { min-height: 315px; } .shell { display: block; } .chat-main { min-height: 100vh; } .chat-header { padding: 0 17px; } .messages { padding: 20px 17px 12px; } .composer-wrap { padding: 10px 17px 18px; } }

@@ -1,6 +1,6 @@
 # talk2me
 
-A calm, private chat workspace for conversations with friends. The app includes email authentication, friend-request acceptance, direct and group chat flows, unread state, and browser notification permission handling.
+A calm, private chat workspace for conversations with friends. The app includes username authentication, friend-request acceptance, direct and group chat flows, unread state, and browser notification permission handling.
 
 ## Run locally
 
@@ -23,7 +23,8 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ```
 
-4. In Supabase Auth, add your local and Vercel URLs to the Site URL / Redirect URLs.
+4. In Supabase Auth > Providers > Email, turn off **Confirm email**. Users only enter a username in talk2me; Supabase internally receives a private email-shaped identifier because its password provider requires one.
+5. In Supabase Auth, add your local and Vercel URLs to the Site URL / Redirect URLs.
 
 The schema creates profiles from new auth users, friend requests, conversations, memberships, messages, unread notifications, row-level security policies, and realtime publications for messages and notifications.
 
