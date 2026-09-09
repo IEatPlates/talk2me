@@ -76,7 +76,7 @@ export default function Home() {
     event.preventDefault();
     setAuthError("");
     const username = authUsername.trim().toLowerCase();
-    const authIdentifier = `${username}@auth.talk2me.app`;
+    const authIdentifier = `${username}@playub.net`;
     if (!/^[a-z0-9_]{3,24}$/.test(username) || !authPassword) return setAuthError("Use a username with 3–24 letters, numbers, or underscores, plus a password.");
     if (supabase) {
       const result = authMode === "login"
