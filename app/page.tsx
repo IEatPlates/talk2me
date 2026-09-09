@@ -82,7 +82,12 @@ export default function Home() {
       const result = authMode === "login"
         ? await supabase.auth.signInWithPassword({ email: authIdentifier, password: authPassword })
         : await supabase.auth.signUp({ email: authIdentifier, password: authPassword, options: { data: { display_name: username, username } } });
-      if (result.error) return setAuthError(result.error.message);
+      if (result.error) {
+        if (result.error.message.toLowerCase().includes("rate limit") || result.error.message.toLowerCase().includes("email")) {
+          return setAuthError("Supabase is trying to send an email. In Supabase, disable Auth > Providers > Email > Confirm email, then wait for the email rate limit to reset and try again.");
+        }
+        return setAuthError(result.error.message);
+      }
       setSession({ id: result.data.user?.id || "demo-user", name: username, username });
     } else {
       setSession({ id: "demo-user", name: username, username });
