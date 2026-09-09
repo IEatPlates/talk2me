@@ -4,32 +4,21 @@ import { FormEvent, useEffect, useState } from "react";
 import { Bell, Check, Hash, LogOut, MessageCircle, MoreHorizontal, Paperclip, Plus, Search, Send, Settings, Smile, UserPlus, Users, X } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 
-type Person = { name: string; handle: string; initials: string; tone: "green" | "yellow" | "coral"; online: boolean };
+type Person = { id: string; name: string; handle: string; initials: string; tone: "green" | "yellow" | "coral"; online: boolean };
 type Message = { id: number; sender: string; body: string; time: string; self?: boolean };
 type Chat = { id: string; name: string; subtitle: string; initials: string; tone: Person["tone"]; kind: "direct" | "group"; members?: number; messages: Message[] };
 
-const me: Person = { name: "Maya Chen", handle: "@mayac", initials: "MC", tone: "coral", online: true };
-const contacts: Person[] = [
-  { name: "Riley Park", handle: "@riley", initials: "RP", tone: "green", online: true },
-  { name: "Noah Williams", handle: "@noahw", initials: "NW", tone: "yellow", online: true },
-  { name: "Sofia Lee", handle: "@sofia", initials: "SL", tone: "green", online: false },
-  { name: "Eli Morgan", handle: "@eli", initials: "EM", tone: "coral", online: false }
-];
-
-const initialChats: Chat[] = [
-  { id: "riley", name: "Riley Park", subtitle: "online now", initials: "RP", tone: "green", kind: "direct", messages: [
-    { id: 1, sender: "Riley Park", body: "The new flow feels so much lighter now. I think we nailed it.", time: "10:42 AM" },
-    { id: 2, sender: "Maya Chen", body: "Right? I wanted it to feel like a place you actually want to return to.", time: "10:44 AM", self: true },
-    { id: 3, sender: "Riley Park", body: "Mission accomplished ✨", time: "10:45 AM" }
-  ] },
-  { id: "studio", name: "Studio crew", subtitle: "4 members", initials: "SC", tone: "yellow", kind: "group", members: 4, messages: [
-    { id: 4, sender: "Noah Williams", body: "Drop your favorite references for Friday's session here.", time: "Yesterday" },
-    { id: 5, sender: "Maya Chen", body: "I have a few saved. Sending them over tonight.", time: "Yesterday", self: true }
-  ] }
-];
+const initialChats: Chat[] = [];
 
 function Avatar({ person, size = "normal" }: { person: Pick<Person, "initials" | "tone">; size?: "normal" | "small" }) {
   return <div className={`avatar ${person.tone} ${size === "small" ? "small" : ""}`}>{person.initials}</div>;
+}
+
+function profileToPerson(profile: { id: string; username: string; display_name: string; avatar_color?: string | null }): Person {
+  const initials = profile.display_name.split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase() || profile.username.slice(0, 2).toUpperCase();
+  const tones: Person["tone"][] = ["green", "yellow", "coral"];
+  const tone = tones[profile.username.length % tones.length];
+  return { id: profile.id, name: profile.display_name, handle: `@${profile.username}`, initials, tone, online: false };
 }
 
 export default function Home() {
@@ -39,13 +28,17 @@ export default function Home() {
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
   const [chats, setChats] = useState(initialChats);
-  const [activeChatId, setActiveChatId] = useState("riley");
+  const [activeChatId, setActiveChatId] = useState("");
   const [draft, setDraft] = useState("");
   const [activeNav, setActiveNav] = useState("Messages");
-  const [friendRequest, setFriendRequest] = useState(true);
+  const [friends, setFriends] = useState<Person[]>([]);
+  const [incomingRequests, setIncomingRequests] = useState<{ id: string; person: Person }[]>([]);
+  const [friendSearch, setFriendSearch] = useState("");
+  const [friendSearchResults, setFriendSearchResults] = useState<Person[]>([]);
+  const [friendError, setFriendError] = useState("");
   const [groupOpen, setGroupOpen] = useState(false);
-  const [selectedFriends, setSelectedFriends] = useState<string[]>(["riley"]);
-  const [unread, setUnread] = useState(2);
+  const [selectedFriends, setSelectedFriends] = useState<string[]>([]);
+  const [unread, setUnread] = useState(0);
 
   useEffect(() => {
     if (!supabase) return;
@@ -57,6 +50,47 @@ export default function Home() {
     });
     return () => listener.subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!supabase || !session?.id) return;
+    const client = supabase;
+    const userId = session.id;
+    async function loadFriendships() {
+      const [{ data: profiles }, { data: friendships, error }] = await Promise.all([
+        client.from("profiles").select("id, username, display_name, avatar_color"),
+        client.from("friendships").select("id, requester_id, addressee_id, status").or(`requester_id.eq.${userId},addressee_id.eq.${userId}`)
+      ]);
+      if (error || !profiles) return;
+      const people = new Map(profiles.map(profile => [profile.id, profileToPerson(profile)]));
+      const accepted: Person[] = [];
+      const incoming: { id: string; person: Person }[] = [];
+      friendships?.forEach(friendship => {
+        const otherId = friendship.requester_id === userId ? friendship.addressee_id : friendship.requester_id;
+        const person = people.get(otherId);
+        if (!person) return;
+        if (friendship.status === "accepted") accepted.push(person);
+        if (friendship.status === "pending" && friendship.addressee_id === userId) incoming.push({ id: friendship.id, person });
+      });
+      setFriends(accepted);
+      setIncomingRequests(incoming);
+    }
+    loadFriendships();
+    const friendshipChannel = client.channel(`friendships:${session.id}`).on("postgres_changes", { event: "*", schema: "public", table: "friendships" }, () => loadFriendships()).subscribe();
+    return () => { client.removeChannel(friendshipChannel); };
+  }, [session?.id]);
+
+  useEffect(() => {
+    if (!supabase || !session?.id || !friendSearch.trim()) {
+      setFriendSearchResults([]);
+      return;
+    }
+    const client = supabase;
+    const timer = window.setTimeout(async () => {
+      const { data } = await client.from("profiles").select("id, username, display_name, avatar_color").ilike("username", `${friendSearch.trim().toLowerCase()}%`).neq("id", session.id).limit(8);
+      setFriendSearchResults((data || []).map(profileToPerson));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [friendSearch, session?.id]);
 
   useEffect(() => {
     if (!supabase || !session?.id) return;
@@ -94,6 +128,20 @@ export default function Home() {
     }
   }
 
+  async function sendFriendRequest(person: Person) {
+    if (!supabase || !session) return setFriendError("Connect Supabase to send friend requests.");
+    setFriendError("");
+    const { error } = await supabase.from("friendships").insert({ requester_id: session.id, addressee_id: person.id });
+    if (error) setFriendError(error.code === "23505" ? "A request already exists with this person." : error.message);
+    else setFriendSearch("");
+  }
+
+  async function acceptFriendRequest(requestId: string) {
+    if (!supabase) return;
+    const { error } = await supabase.from("friendships").update({ status: "accepted" }).eq("id", requestId);
+    if (error) setFriendError(error.message);
+  }
+
   function sendMessage(event: FormEvent) {
     event.preventDefault();
     const body = draft.trim();
@@ -112,8 +160,8 @@ export default function Home() {
     setGroupOpen(false);
   }
 
-  const activeChat = chats.find(chat => chat.id === activeChatId) || chats[0];
-  const currentUser: Person = { ...me, name: session?.name || me.name, handle: session ? `@${session.username}` : me.handle };
+  const activeChat = chats.find(chat => chat.id === activeChatId) || { id: "empty", name: "Messages", subtitle: "Select a friend to start", initials: "--", tone: "green" as const, kind: "direct" as const, messages: [] };
+  const currentUser: Person = { id: session?.id || "demo-user", name: session?.name || "You", handle: session ? `@${session.username}` : "@you", initials: session?.username.slice(0, 2).toUpperCase() || "YO", tone: "green", online: true };
 
   if (!session) return <AuthScreen mode={authMode} setMode={setAuthMode} username={authUsername} setUsername={setAuthUsername} password={authPassword} setPassword={setAuthPassword} error={authError} onSubmit={handleAuth} />;
 
@@ -124,7 +172,7 @@ export default function Home() {
       <div className="nav-label">Workspace</div>
       <nav className="nav">
         <button className={`nav-item ${activeNav === "Messages" ? "active" : ""}`} onClick={() => setActiveNav("Messages")}><MessageCircle size={16} /> Messages <span className="count">{unread}</span></button>
-        <button className={`nav-item ${activeNav === "Friends" ? "active" : ""}`} onClick={() => setActiveNav("Friends")}><Users size={16} /> Friends {friendRequest && <span className="count">1</span>}</button>
+        <button className={`nav-item ${activeNav === "Friends" ? "active" : ""}`} onClick={() => setActiveNav("Friends")}><Users size={16} /> Friends {incomingRequests.length > 0 && <span className="count">{incomingRequests.length}</span>}</button>
         <button className={`nav-item ${activeNav === "Notifications" ? "active" : ""}`} onClick={() => { setActiveNav("Notifications"); setUnread(0); }}><Bell size={16} /> Notifications</button>
       </nav>
       <div style={{ marginTop: 30 }} className="nav-label">Your chats</div>
@@ -138,12 +186,16 @@ export default function Home() {
         <header className="chat-header"><div className="header-person"><Avatar person={activeChat} /><div><h1>{activeChat.name}</h1><p>{activeChat.kind === "group" ? `${activeChat.members} members` : activeChat.subtitle}</p></div></div><div className="header-actions"><button className="icon-btn" title="Search"><Search size={15} /></button><button className="icon-btn" title="More options"><MoreHorizontal size={16} /></button></div></header>
         <div className="messages"><div className="date-label">Today, October 24</div>{activeChat.messages.length ? activeChat.messages.map(message => <div className={`message-row ${message.self ? "self" : ""}`} key={message.id}>{!message.self && <Avatar person={activeChat} size="small" />}<div className="message-content"><div className="bubble">{message.body}</div><div className="message-meta">{message.self ? "You" : message.sender} · {message.time}</div></div></div>) : <div className="empty-panel"><div><MessageCircle size={25} color="#65c5a2" /><h2>Start the conversation</h2><p>This is a fresh space for your circle. Say something good.</p></div></div>}</div>
         <div className="composer-wrap"><form className="composer" onSubmit={sendMessage}><button type="button" className="icon-btn" style={{ border: 0, width: 28 }} title="Attach a file"><Paperclip size={16} /></button><textarea value={draft} onChange={event => setDraft(event.target.value)} onKeyDown={event => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); sendMessage(event); } }} placeholder={`Message ${activeChat.name}`} rows={1} /><button type="button" className="icon-btn" style={{ border: 0, width: 28 }} title="Add emoji"><Smile size={16} /></button><button className="send-btn" type="submit" title="Send message"><Send size={15} /></button></form></div>
-      </> : <div className="empty-panel"><div>{activeNav === "Friends" ? <Users size={28} color="#65c5a2" /> : <Bell size={28} color="#65c5a2" />}<h2>{activeNav}</h2><p>{activeNav === "Friends" ? "Your people live here. Accept requests and keep your circles close." : "You are all caught up. New message alerts will appear here."}</p></div></div>}
+      </> : activeNav === "Friends" ? <FriendsPanel friends={friends} incomingRequests={incomingRequests} search={friendSearch} setSearch={setFriendSearch} results={friendSearchResults} onRequest={sendFriendRequest} onAccept={acceptFriendRequest} error={friendError} /> : <div className="empty-panel"><div><Bell size={28} color="#007aff" /><h2>Notifications</h2><p>You are all caught up. New message alerts will appear here.</p></div></div>}
     </section>
 
-    <aside className="rail"><div className="rail-section"><div className="rail-heading"><h2>People online</h2><span>{contacts.filter(person => person.online).length} active</span></div>{contacts.filter(person => person.online).map(person => <div className="person" key={person.handle}><Avatar person={person} size="small" /><div><strong>{person.name}</strong><span>{person.handle}</span></div><i className="presence" /></div>)}</div><div className="rail-section"><div className="rail-heading"><h2>Friend requests</h2><span>{friendRequest ? "1 new" : "clear"}</span></div>{friendRequest ? <div className="request"><div className="person"><Avatar person={{ initials: "JD", tone: "yellow" }} size="small" /><div><strong>Jordan Diaz</strong><span>@jordand</span></div></div><button className="accept-btn" onClick={() => setFriendRequest(false)}><Check size={12} /> Accept</button></div> : <p style={{ color: "#9aa7a0", fontSize: 11 }}>No new requests.</p>}</div><div><div className="rail-heading"><h2>Quick note</h2><span><Bell size={12} /></span></div><p style={{ color: "#89968f", fontSize: 11, lineHeight: 1.7, margin: 0 }}>You’ll get a browser notification for new messages when this chat isn’t open.</p></div></aside>
-    {groupOpen && <div className="modal-backdrop"><form className="modal" onSubmit={createGroup}><button type="button" className="icon-btn close" onClick={() => setGroupOpen(false)}><X size={16} /></button><span className="kicker">New space</span><h2>Create a group chat</h2><p>Choose the friends you want in this conversation.</p>{contacts.map(person => <label className="friend-check" key={person.handle}><input type="checkbox" checked={selectedFriends.includes(person.handle)} onChange={() => setSelectedFriends(current => current.includes(person.handle) ? current.filter(item => item !== person.handle) : [...current, person.handle])} /><Avatar person={person} size="small" /><span>{person.name}</span><small>{person.handle}</small></label>)}<button className="primary-btn full" type="submit">Create group</button></form></div>}
+    <aside className="rail"><div className="rail-section"><div className="rail-heading"><h2>Your friends</h2><span>{friends.length}</span></div>{friends.length ? friends.map(person => <div className="person" key={person.id}><Avatar person={person} size="small" /><div><strong>{person.name}</strong><span>{person.handle}</span></div></div>) : <p style={{ color: "#8e8e93", fontSize: 11 }}>Your accepted friends will appear here.</p>}</div><div className="rail-section"><div className="rail-heading"><h2>Friend requests</h2><span>{incomingRequests.length ? `${incomingRequests.length} new` : "clear"}</span></div>{incomingRequests.length ? incomingRequests.map(request => <div className="request" key={request.id}><div className="person"><Avatar person={request.person} size="small" /><div><strong>{request.person.name}</strong><span>{request.person.handle}</span></div></div><button className="accept-btn" onClick={() => acceptFriendRequest(request.id)}><Check size={12} /> Accept</button></div>) : <p style={{ color: "#8e8e93", fontSize: 11 }}>No new requests.</p>}</div><div><div className="rail-heading"><h2>Quick note</h2><span><Bell size={12} /></span></div><p style={{ color: "#8e8e93", fontSize: 11, lineHeight: 1.7, margin: 0 }}>Friend requests and accepted friends update here in real time.</p></div></aside>
+    {groupOpen && <div className="modal-backdrop"><form className="modal" onSubmit={createGroup}><button type="button" className="icon-btn close" onClick={() => setGroupOpen(false)}><X size={16} /></button><span className="kicker">New space</span><h2>Create a group chat</h2><p>Choose the friends you want in this conversation.</p>{friends.map(person => <label className="friend-check" key={person.id}><input type="checkbox" checked={selectedFriends.includes(person.id)} onChange={() => setSelectedFriends(current => current.includes(person.id) ? current.filter(item => item !== person.id) : [...current, person.id])} /><Avatar person={person} size="small" /><span>{person.name}</span><small>{person.handle}</small></label>)}{!friends.length && <p style={{ color: "#8e8e93", fontSize: 12 }}>Add friends before creating a group.</p>}<button className="primary-btn full" type="submit" disabled={!friends.length}>Create group</button></form></div>}
   </main>;
+}
+
+function FriendsPanel({ friends, incomingRequests, search, setSearch, results, onRequest, onAccept, error }: { friends: Person[]; incomingRequests: { id: string; person: Person }[]; search: string; setSearch: (value: string) => void; results: Person[]; onRequest: (person: Person) => void; onAccept: (requestId: string) => void; error: string }) {
+  return <div className="friends-panel"><div className="friends-panel-header"><div><span className="kicker">Your people</span><h2>Friends</h2><p>Find someone by username and send a request.</p></div><UserPlus size={28} color="#007aff" /></div><div className="friend-search"><Search size={16} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Search username" autoCapitalize="none" autoCorrect="off" /></div>{error && <p className="friend-error">{error}</p>}{search && <div className="friend-results">{results.length ? results.map(person => <div className="friend-result" key={person.id}><Avatar person={person} size="small" /><div><strong>{person.name}</strong><span>{person.handle}</span></div><button className="accept-btn" onClick={() => onRequest(person)}>Add</button></div>) : <p className="friends-empty">No users found.</p>}</div>}<div className="friends-list"><div className="friends-list-title">Accepted friends</div>{friends.length ? friends.map(person => <div className="friend-result" key={person.id}><Avatar person={person} size="small" /><div><strong>{person.name}</strong><span>{person.handle}</span></div><span className="friend-status">Friends</span></div>) : <div className="friends-empty">You have no accepted friends yet.</div>}</div>{incomingRequests.length > 0 && <div className="friends-list"><div className="friends-list-title">Incoming requests</div>{incomingRequests.map(request => <div className="friend-result" key={request.id}><Avatar person={request.person} size="small" /><div><strong>{request.person.name}</strong><span>{request.person.handle}</span></div><button className="accept-btn" onClick={() => onAccept(request.id)}>Accept</button></div>)}</div>}</div>;
 }
 
 function AuthScreen({ mode, setMode, username, setUsername, password, setPassword, error, onSubmit }: { mode: "login" | "signup"; setMode: (mode: "login" | "signup") => void; username: string; setUsername: (value: string) => void; password: string; setPassword: (value: string) => void; error: string; onSubmit: (event: FormEvent) => void }) {

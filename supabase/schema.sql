@@ -100,3 +100,4 @@ create trigger on_message_created after insert on public.messages for each row e
 
 alter publication supabase_realtime add table public.messages;
 alter publication supabase_realtime add table public.notifications;
+alter publication supabase_realtime add table public.friendships;
